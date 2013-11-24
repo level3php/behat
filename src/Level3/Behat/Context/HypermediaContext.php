@@ -43,7 +43,7 @@ class HypermediaContext extends BehatContext
      */
     public function thatIWantToDelete()
     {
-            $this->method = 'DELETE';
+        $this->method = 'DELETE';
     }
 
     /**
@@ -51,7 +51,7 @@ class HypermediaContext extends BehatContext
      */
     public function thatIWantToFind()
     {
-            $this->method = 'GET';
+        $this->method = 'GET';
     }
 
     /**
@@ -59,7 +59,7 @@ class HypermediaContext extends BehatContext
      */
     public function thatIWantToMakeANew()
     {
-            $this->method = 'POST';
+        $this->method = 'POST';
     }
 
     /**
@@ -67,7 +67,7 @@ class HypermediaContext extends BehatContext
      */
     public function thatIWantToUpdate()
     {
-            $this->method = 'PUT';
+        $this->method = 'PUT';
     }
 
     /**
@@ -75,7 +75,7 @@ class HypermediaContext extends BehatContext
      */
     public function thatIWantToModify()
     {
-            $this->method = 'PATCH';
+        $this->method = 'PATCH';
     }
 
     /**
