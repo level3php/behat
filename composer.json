@@ -1,0 +1,20 @@
+{
+    "name": "level3/behat",
+    "homepage": "http://github.com/level3php/behat",
+    "description": "Behat Context for make behavior tests of Hypermedia APIs",
+    "type": "library",
+    "keywords": [
+        "rest", "restful", "hal", "siren", "hateoas", "siren",
+        "api", "behavior", "test", "behat"
+    ],
+    "license": "MIT",
+    "require": {
+        "behat/behat": "v2.5.0",
+        "guzzle/guzzle": "v3.7.0"
+    },
+    "autoload": {
+        "psr-0": {
+            "Level3\\Behat": "src/"
+        }
+    }
+}
