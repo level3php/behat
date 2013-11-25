@@ -174,9 +174,10 @@ class HypermediaContext extends BehatContext
     protected function doRequest($method, $url)
     {
         $this->clientConfig['body'] = json_encode($this->clientConfig['body']);
-
-        $response = StaticClient::$method($url, $this->clientConfig);
         $this->clientConfig['body'] = [];
+        unset($this->clientConfig['body']);
+        
+        $response = StaticClient::$method($url, $this->clientConfig);
 
         return $response;
     }
