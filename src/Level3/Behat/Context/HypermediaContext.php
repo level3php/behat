@@ -21,6 +21,7 @@ class HypermediaContext extends BehatContext
     protected $method;
     protected $clientConfig =  [
         'headers' => [],
+        'body' => [],
         'timeout' => 10
     ];
 
@@ -94,6 +95,56 @@ class HypermediaContext extends BehatContext
     }
 
     /**
+     * @Given /^I have "([^"]*)" property equal to "([^"]*)"$/
+     */
+    public function iHavePropertyEqualTo($property, $value)
+    {
+        $this->clientConfig['body'][$property] = $value;
+    }
+
+    /**
+     * @When /^I request last resource$/
+     */
+    public function iRequestLastResource()
+    {
+        if (!$this->resource) {
+            throw new UnexpectedValueException(
+                'Before use this step make a normal request!'
+            );
+        }
+
+        if (!$this->resource->getURI()) {
+            throw new UnexpectedValueException(
+                'This resource not contains an url!'
+            );
+        }
+
+        $this->iRequest($this->resource->getURI());
+    }
+
+    /**
+     * @When /^I request "([^"]*)" link from last resource$/
+     */
+    public function iRequestLinkFromLastResource($rel)
+    {
+        if (!$this->resource) {
+            throw new UnexpectedValueException(
+                'Before use this step make a normal request!'
+            );
+        }
+
+        $link = $this->resource->getLinks($rel);
+        if (!is_object($link)) {
+             throw new UnexpectedValueException(sprintf(
+                'Link "%s" is not set!',
+                $rel
+            ));
+        }
+
+        $this->iRequest($link->getHref());
+    }
+
+    /**
      * @When /^I request "([^"]*)"$/
      */
     public function iRequest($uri)
@@ -102,17 +153,32 @@ class HypermediaContext extends BehatContext
         $method = strtolower($this->method);
 
         try {
-            $response = StaticClient::get($url, $this->clientConfig);
+            $response = $this->doRequest($method, $url);
         } catch (Exception\BadResponseException $e) {
             $response = $e->getResponse();
         } catch (Exception\ServerErrorResponseException $e) {
             $response = $e->getResponse();
         }
 
-        $reader = $this->getReader($response->getContentType());
+        //$this->printDebug($url, $response->getMessage());
+
+        if ($response->getStatusCode() !== 204) {
+
+            $reader = $this->getReader($response->getContentType());
+            $this->resource = $reader->execute($response->getBody(true));
+        }
 
         $this->response = $response;
-        $this->resource = $reader->execute($response->getBody(true));
+    }
+
+    protected function doRequest($method, $url)
+    {
+        $this->clientConfig['body'] = json_encode($this->clientConfig['body']);
+
+        $response = StaticClient::$method($url, $this->clientConfig);
+        $this->clientConfig['body'] = [];
+
+        return $response;
     }
 
     protected function getURL($uri)
@@ -187,7 +253,7 @@ class HypermediaContext extends BehatContext
         if (!isset($data[$property])) {
             throw new UnexpectedValueException(sprintf(
                 'Property "%s" is not set!',
-                $header
+                $property
             ));
         }
     }
