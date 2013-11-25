@@ -21,7 +21,6 @@ class HypermediaContext extends BehatContext
     protected $method;
     protected $clientConfig =  [
         'headers' => [],
-        'body' => [],
         'timeout' => 10
     ];
 
@@ -160,7 +159,7 @@ class HypermediaContext extends BehatContext
             $response = $e->getResponse();
         }
 
-        //$this->printDebug($url, $response->getMessage());
+        //$this->printDebug($response->getMessage());
 
         if ($response->getStatusCode() !== 204) {
 
@@ -173,12 +172,12 @@ class HypermediaContext extends BehatContext
 
     protected function doRequest($method, $url)
     {
-        $this->clientConfig['body'] = json_encode($this->clientConfig['body']);
-        $this->clientConfig['body'] = [];
-        unset($this->clientConfig['body']);
+        if (isset($this->clientConfig['body']) && $this->clientConfig['body']) {
+            $this->clientConfig['body'] = json_encode($this->clientConfig['body']);
+        }        
         
         $response = StaticClient::$method($url, $this->clientConfig);
-
+        unset($this->clientConfig['body']);
         return $response;
     }
 
