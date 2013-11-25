@@ -8,7 +8,9 @@
         "api", "behavior", "test", "behat"
     ],
     "license": "MIT",
+    "minimum-stability": "dev",
     "require": {
+        "level3/resource": "*",
         "behat/behat": "v2.5.0",
         "guzzle/guzzle": "v3.7.0"
     },

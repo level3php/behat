@@ -8,17 +8,21 @@ use Guzzle\Http\StaticClient;
 use Guzzle\Http\Exception;
 use UnexpectedValueException;
 
+use Level3\Resource\Format\Reader\HAL;
+use Level3\Behat\Context\HypermediaContext\FormatReaderRepository;
+
 /**
  * Hypermedia context.
  */
 class HypermediaContext extends BehatContext
 {
     protected $parameters = [];
+    protected $formatRepository;
     protected $method;
-    protected $clientDefaultConfig =  array(
-        'headers' => array('X-Foo' => 'Bar'),
+    protected $clientConfig =  [
+        'headers' => [],
         'timeout' => 10
-    );
+    ];
 
     /**
      * Initializes context.
@@ -27,6 +31,9 @@ class HypermediaContext extends BehatContext
     public function __construct(Array $parameters)
     {
         $this->parameters = $parameters;
+
+        $this->formatRepository = new FormatReaderRepository();
+        $this->formatRepository->addReader(new HAL\JsonReader());
     }
 
     public function getParameter($name)
@@ -79,6 +86,14 @@ class HypermediaContext extends BehatContext
     }
 
     /**
+     * @Given /^I have a "([^"]*)" header equal to "([^"]*)"$/
+     */
+    public function iHaveAHeaderEqualTo($header, $value)
+    {
+        $this->clientConfig['headers'][$header] = $value;
+    }
+
+    /**
      * @When /^I request "([^"]*)"$/
      */
     public function iRequest($uri)
@@ -87,19 +102,37 @@ class HypermediaContext extends BehatContext
         $method = strtolower($this->method);
 
         try {
-            $this->response = StaticClient::get($url, $this->clientDefaultConfig);
+            $response = StaticClient::get($url, $this->clientConfig);
         } catch (Exception\BadResponseException $e) {
-            $this->response = $e->getResponse();
+            $response = $e->getResponse();
         } catch (Exception\ServerErrorResponseException $e) {
-            $this->response = $e->getResponse();
+            $response = $e->getResponse();
         }
+
+        $reader = $this->getReader($response->getContentType());
+
+        $this->response = $response;
+        $this->resource = $reader->execute($response->getBody(true));
     }
 
     protected function getURL($uri)
     {
         return Url::factory($this->getParameter('base_url'))->combine($uri);
     }
-    
+
+    protected function getReader($contentType)
+    {
+        $reader = $this->formatRepository->getReaderByContentType($contentType);
+        if (!$reader) {
+            throw new UnexpectedValueException(sprintf(
+                'Unsuported Content-Type "%s"',
+                $contentType
+            ));
+        }
+
+        return $reader;
+    }
+
     /**
      * @Then /^the response status code should be (\d+)$/
      */
@@ -115,16 +148,46 @@ class HypermediaContext extends BehatContext
     }
 
     /**
+     * @Given /^the response has a "([^"]*)" header$/
+     */
+    public function theResponseHasAHeader($header)
+    {
+        $found = $this->response->getHeader($header);
+        if (!$found) {
+            throw new UnexpectedValueException(sprintf(
+                'Header "%s" is not set!',
+                $header
+            ));
+        }
+    }
+
+    /**
+     * @Then /^the "([^"]*)" header is equal to "([^"]*)"$/
+     */
+    public function theHeaderIsEqualTo($header, $expected)
+    {
+        $this->theResponseHasAHeader($header);
+
+        $found = $this->response->getHeader($header);
+        if ($found != $expected) {
+            throw new UnexpectedValueException(sprintf(
+                'Header value mismatch! (found: "%s", expected: "%s")',
+                $found,
+                $expected
+            ));
+        }
+    }
+
+    /**
      * @Given /^the response has a "([^"]*)" property$/
      */
     public function theResponseHasAProperty($property)
     {
-        $data = $this->decodeJson($this->response->getBody(true));
-
-        if (!is_array($data) || !isset($data[$property])) {
+        $data = $this->resource->getData();
+        if (!isset($data[$property])) {
             throw new UnexpectedValueException(sprintf(
                 'Property "%s" is not set!',
-                $property
+                $header
             ));
         }
     }
@@ -132,56 +195,56 @@ class HypermediaContext extends BehatContext
     /**
      * @Then /^the "([^"]*)" property equals "([^"]*)"$/
      */
-    public function thePropertyEquals($property, $value)
-    {
-        $data = $this->decodeJson($this->response->getBody(true));
-
+    public function thePropertyEquals($property, $expected)
+    {        
         $this->theResponseHasAProperty($property);
 
-        if ($data[$property] !== $value) {
+        $data = $this->resource->getData();
+        if ($data[$property] != $expected) {
             throw new UnexpectedValueException(sprintf(
                 'Property value mismatch! (found: "%s", expected: "%s")',
                 $data[$property],
-                $value
+                $expected
             ));
         }
     }
 
     /**
-     * @Given /^the relation "([^"]*)" links to "([^"]*)"$/
+     * @Given /^the "([^"]*)" relation links to "([^"]*)"$/
      */
     public function theRelationLinksTo($rel, $href)
     {
-        $links = $this->retrieveLinkByRelation($rel);
-        if ($this->isAssocArray($links)) {
+        $links = $this->resource->getLinks($rel);
+        if (!is_array($links)) {
             $links = [$links];
         }            
 
         $found = false;
         foreach ($links as $link) {
-            if (isset($link['href']) && $link['href'] == $href) {
+            if ($link->getHref() == $href) {
                 $found = true;
             } 
         }
 
         if (!$found) {
             throw new UnexpectedValueException(sprintf(
-                'No link found to "%s"', 
+                'Missing relation "%s" linked to "%s"', 
+                $rel,
                 $href
             ));
         }
     }
 
     /**
-     * @Given /^the relation "([^"]*)" have (\d+) links$/
+     * @Given /^the "([^"]*)" relation have (\d+) links$/
      */
     public function theRelationHaveLinks($rel, $count)
     {
-        $link = $this->retrieveLinkByRelation($rel);
-        if(is_array($link) && count($link) != $count) {
+        $links = $this->resource->getLinks($rel);
+        if(count($links) != $count) {
             throw new UnexpectedValueException(sprintf(
                 'The relation contains %d links' . PHP_EOL,
-                count($link)
+                count($links)
             ));
         }
     }
@@ -234,10 +297,5 @@ class HypermediaContext extends BehatContext
         }
 
         throw new UnexpectedValueException('JSON decoding error: ' . $message);
-    }
-
-    public function isAssocArray($array)
-    {
-        return array_keys($array) !== range(0, count($array) - 1);
     }
 }
