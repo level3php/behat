@@ -98,7 +98,18 @@ class HypermediaContext extends BehatContext
      */
     public function iHavePropertyEqualTo($property, $value)
     {
-        $this->clientConfig['body'][$property] = $value;
+        $this->clientConfig['body'][$property] = $this->jsonDecode($value);
+    }
+
+    protected function jsonDecode($value)
+    {
+        if (!in_array($value[0], ["'", '"','[', '{'])) {
+            $value = '"' . $value . '"';
+        } else {
+            $value = str_replace("'", '"', $value);
+        }
+
+        return  json_decode($value);
     }
 
     /**
@@ -106,20 +117,44 @@ class HypermediaContext extends BehatContext
      */
     public function iRequestLastResource()
     {
-        if (!$this->resource) {
+        $this->doIRequestResource($this->resource);
+    }
+
+    /**
+     * @When /^I request (\d+) resource from "([^"]*)" relation$/
+     */
+    public function iRequestResourceFromRelation($position, $rel)
+    {
+
+        $resource = $this->resource->getResources($rel);
+        if (!isset($resource[$position])) {
+            throw new UnexpectedValueException(sprintf(
+                'Resource at position "%d" on relation "%s" is not set!',
+                $postion, $rel
+            ));
+        }
+        
+        $this->doIRequestResource($resource[$position]);
+
+    }
+
+    protected function doIRequestResource($resource)
+    {
+        if (!$resource) {
             throw new UnexpectedValueException(
                 'Before use this step make a normal request!'
             );
         }
 
-        if (!$this->resource->getURI()) {
+        if (!$resource->getURI()) {
             throw new UnexpectedValueException(
                 'This resource not contains an url!'
             );
         }
 
-        $this->iRequest($this->resource->getURI());
+        $this->iRequest($resource->getURI());
     }
+
 
     /**
      * @When /^I request "([^"]*)" link from last resource$/
@@ -159,9 +194,10 @@ class HypermediaContext extends BehatContext
             $response = $e->getResponse();
         }
 
-        //$this->printDebug($response->getMessage());
-
-        if ($response->getStatusCode() !== 204) {
+        if ($response->getStatusCode() !== 204 && 
+            $response->getStatusCode() >= 200 && 
+            $response->getStatusCode() < 300
+        ) {
 
             $reader = $this->getReader($response->getContentType());
             $this->resource = $reader->execute($response->getBody(true));
@@ -175,7 +211,7 @@ class HypermediaContext extends BehatContext
         if (isset($this->clientConfig['body']) && $this->clientConfig['body']) {
             $this->clientConfig['body'] = json_encode($this->clientConfig['body']);
         }        
-        
+
         $response = StaticClient::$method($url, $this->clientConfig);
         unset($this->clientConfig['body']);
         return $response;
@@ -250,7 +286,21 @@ class HypermediaContext extends BehatContext
     public function theResponseHasAProperty($property)
     {
         $data = $this->resource->getData();
-        if (!isset($data[$property])) {
+        if (!array_key_exists($property, $data)) {
+            throw new UnexpectedValueException(sprintf(
+                'Property "%s" is not set!',
+                $property
+            ));
+        }
+    }
+
+    /**
+     * @Given /^the response not has a "([^"]*)" property$/
+     */
+    public function theResponseNotHasAProperty($property)
+    {
+        $data = $this->resource->getData();
+        if (array_key_exists($property, $data)) {
             throw new UnexpectedValueException(sprintf(
                 'Property "%s" is not set!',
                 $property
@@ -265,12 +315,13 @@ class HypermediaContext extends BehatContext
     {        
         $this->theResponseHasAProperty($property);
 
+        $expected = $this->jsonDecode($expected);
         $data = $this->resource->getData();
         if ($data[$property] != $expected) {
             throw new UnexpectedValueException(sprintf(
                 'Property value mismatch! (found: "%s", expected: "%s")',
-                $data[$property],
-                $expected
+                json_encode($data[$property]),
+                json_encode($expected)
             ));
         }
     }
@@ -314,4 +365,33 @@ class HypermediaContext extends BehatContext
             ));
         }
     }
+
+    /**
+     * @Given /^the "([^"]*)" relation have links$/
+     */
+    public function theRelationHaveAnyLinks($rel)
+    {
+        $links = $this->resource->getLinks($rel);
+        if(!$links) {
+            throw new UnexpectedValueException(sprintf(
+                'The relation contains %d links' . PHP_EOL,
+                count($links)
+            ));
+        }
+    }
+
+    /**
+     * @Given /^the "([^"]*)" relation have (\d+) resources$/
+     */
+    public function theRelationHaveResources($rel, $count)
+    {
+        $links = $this->resource->getResources($rel);
+        if(count($links) != $count) {
+            throw new UnexpectedValueException(sprintf(
+                'The relation contains %d resources' . PHP_EOL,
+                count($links)
+            ));
+        }
+    }
+    
 }
